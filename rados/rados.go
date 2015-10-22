@@ -19,11 +19,14 @@ func (e RadosError) Error() string {
 }
 
 var RadosErrorNotFound = errors.New("Rados error not found")
+var RadosErrorConflict = errors.New("Rados error conflict")
 
 func GetRadosError(err C.int) error {
 	if err != 0 {
 		if err == -C.ENOENT {
 			return RadosErrorNotFound
+		} else if (err == -17 || err  == -125) {
+			return RadosErrorConflict
 		}
 		return RadosError(err)
 	} else {
