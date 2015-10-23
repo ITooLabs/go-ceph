@@ -52,8 +52,12 @@ func (ioctx *IOContext) ReadTaggedFull(oid string, tagName string, data []byte) 
     ret := C.rados_read_op_operate(op, ioctx.ioctx, c_oid, 0)
     
     C.rados_release_read_op(op)
-
     defer func() { C.rados_getxattrs_end(it) }()
+
+    if ret < 0 {
+        return 0, nil, GetRadosError(ret)
+    }
+
     for {
         var c_name, c_val *C.char
         var c_len C.size_t
