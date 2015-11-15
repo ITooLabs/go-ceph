@@ -31,32 +31,39 @@ func (ioctx *IOContext) ReadTaggedFull(oid string, tagName string, data []byte) 
     defer C.free(unsafe.Pointer(c_tagName))
 
     var size C.size_t
-    var rval C.int
+    var rval_read C.int
+    var rval_attr C.int
     var it C.rados_xattrs_iter_t
 
     op := C.rados_create_read_op()
+    defer func() { C.rados_release_read_op(op) }()
 
     C.rados_read_op_read(
         op,
-        0,
+        (C.uint64_t)(0),
         (C.size_t)(len(data)),
         (*C.char)(unsafe.Pointer(&data[0])),
         &size,
-        &rval)
+        &rval_read)
 
     C.rados_read_op_getxattrs(
         op,
         &it,
-        &rval)
+        &rval_attr)
     
     ret := C.rados_read_op_operate(op, ioctx.ioctx, c_oid, 0)
-    
-    C.rados_release_read_op(op)
-    defer func() { C.rados_getxattrs_end(it) }()
 
     if ret < 0 {
         return 0, nil, GetRadosError(ret)
     }
+    if rval_read < 0 {
+        return 0, nil, GetRadosError(rval_read);
+    }
+    if rval_attr < 0 {
+        return 0, nil, GetRadosError(ret)
+    }
+
+    defer func() { C.rados_getxattrs_end(it) }()
 
     for {
         var c_name, c_val *C.char
@@ -79,7 +86,8 @@ func (ioctx *IOContext) ReadTaggedFull(oid string, tagName string, data []byte) 
         }
     }
 
-    return int(size), tag, GetRadosError(ret)
+    return int(size), tag, nil
+
 }
 
 func (ioctx *IOContext) WriteTaggedFull(oid string, tagName string, tag string, newTag string, data []byte) error {
@@ -87,6 +95,9 @@ func (ioctx *IOContext) WriteTaggedFull(oid string, tagName string, tag string, 
     c_tagName := C.CString(tagName)
     defer C.free(unsafe.Pointer(c_oid))
     defer C.free(unsafe.Pointer(c_tagName))
+
+    b_tag := []byte(tag)
+    b_newTag := []byte(newTag)
 
     op := C.rados_create_write_op()
 
@@ -100,8 +111,8 @@ func (ioctx *IOContext) WriteTaggedFull(oid string, tagName string, tag string, 
             op,
             c_tagName,
             LIBRADOS_CMPXATTR_OP_EQ,
-            (*C.char)(unsafe.Pointer(&([]byte(tag))[0])),
-            (C.size_t)(len([]byte(tag))))
+            (*C.char)(unsafe.Pointer(&b_tag[0])),
+            (C.size_t)(len(b_tag)))
     }
     
     C.rados_write_op_write_full(
@@ -112,8 +123,8 @@ func (ioctx *IOContext) WriteTaggedFull(oid string, tagName string, tag string, 
     C.rados_write_op_setxattr(
         op,
         c_tagName,
-        (*C.char)(unsafe.Pointer(&([]byte(newTag))[0])),
-        (C.size_t)(len([]byte(newTag))))
+        (*C.char)(unsafe.Pointer(&b_newTag[0])),
+        (C.size_t)(len(b_newTag)))
     
     ret := C.rados_write_op_operate(op, ioctx.ioctx, c_oid, nil, 0)
     
