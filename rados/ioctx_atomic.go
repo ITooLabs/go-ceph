@@ -20,7 +20,7 @@ const (
     LIBRADOS_CREATE_IDEMPOTENT = 0
 )
 
-func (ioctx *IOContext) ReadTaggedFull(oid string, tagName string, data []byte) (n int, tag []byte, err error) {
+func (ioctx *IOContext) ReadTaggedFull(oid string, tagName string, data []byte, offset int) (n int, tag []byte, err error) {
     if len(data) == 0 {
         return 0, nil, nil
     }
@@ -40,7 +40,7 @@ func (ioctx *IOContext) ReadTaggedFull(oid string, tagName string, data []byte) 
 
     C.rados_read_op_read(
         op,
-        (C.uint64_t)(0),
+        (C.uint64_t)(offset),
         (C.size_t)(len(data)),
         (*C.char)(unsafe.Pointer(&data[0])),
         &size,
